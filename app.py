@@ -553,39 +553,109 @@ st.markdown(
 # -------------------- THERMAL ZONE MAP --------------------
 st.markdown('<div class="section-title">❯ THERMAL ZONE MAP</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="section-subtitle">Live visualization of targeted airflow distribution</div>',
+    '<div class="section-subtitle">Live room view — one physical room with four virtual thermal zones</div>',
     unsafe_allow_html=True
 )
 
 map_results = st.session_state.results
-map_html = f'<div class="zone-map"><div class="hvac">CENTRAL HVAC<small>Supply Air</small></div><div class="zone-grid">'
-for i in range(4):
-    if map_results:
-        demand = map_results[i]["demand"]
-        damper = map_results[i]["damper"]
-        bg = DEMAND_BG[demand]
-        fg = DEMAND_FG[demand]
-        airflow = "█" * max(1, damper // 20)
-        body = (
-            f'<div class="zone-box" style="background:{bg};border-color:{ZONE_ACCENTS[i]}">'
-            f'<div class="zone-name">ZONE {i+1}</div>'
-            f'<div class="zone-result" style="color:{fg}">{demand} • DAMPER {damper}%</div>'
-            f'<div class="airflow" style="color:{ZONE_ACCENTS[i]}">Airflow: {airflow}</div>'
-            f'</div>'
-        )
-    else:
-        body = (
+
+if map_results:
+    # A compact SVG room view that updates whenever SHOTZS is re-run.
+    svg_parts = []
+    svg_parts.append(f"""
+    <div style="background:#FBFCFE;border:1px solid {BORDER};border-radius:12px;padding:10px;overflow:hidden;">
+      <svg viewBox="0 0 1200 560" width="100%" role="img" aria-label="SHOTZS four-zone room visualization">
+        <defs>
+          <filter id="shadow"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity=".12"/></filter>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L0,6 L9,3 z" fill="{NAVY}"/>
+          </marker>
+          <style>
+            .flow {{ animation: flowPulse 1.5s ease-in-out infinite; transform-origin:center; }}
+            @keyframes flowPulse {{ 0%,100% {{ opacity:.55; }} 50% {{ opacity:1; }} }}
+          </style>
+        </defs>
+        <rect x="15" y="15" width="1170" height="530" rx="20" fill="#FFFFFF" stroke="{NAVY}" stroke-width="4" filter="url(#shadow)"/>
+        <text x="600" y="48" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700" fill="{NAVY}">
+          VIRTUAL ROOM DIGITAL TWIN
+        </text>
+        <text x="600" y="72" text-anchor="middle" font-family="Arial" font-size="13" fill="{MUTED}">
+          No physical partitions • Cooling is dynamically rebalanced by SHOTZS
+        </text>
+    """)
+    # Central AC
+    svg_parts.append(f"""
+        <rect x="505" y="86" width="190" height="68" rx="14" fill="{NAVY}"/>
+        <text x="600" y="114" text-anchor="middle" font-family="Arial" font-size="17" font-weight="700" fill="white">CENTRAL AC</text>
+        <text x="600" y="137" text-anchor="middle" font-family="Arial" font-size="11" fill="#C9D8E7">CENTRAL AIRFLOW CONTROL</text>
+    """)
+
+    zone_boxes = [
+        (45, 185, 535, 345),
+        (665, 185, 535, 345),
+        (45, 365, 535, 160),
+        (665, 365, 535, 160),
+    ]
+    # arrow targets toward each zone
+    arrow_targets = [(285, 215), (915, 215), (285, 410), (915, 410)]
+    for i, r in enumerate(map_results):
+        x, y, w, h = zone_boxes[i]
+        demand = r["thermal_score"]
+        pred = r["predicted_score"]
+        damper = r["damper"]
+        demand_name = r["demand"]
+        accent = ZONE_ACCENTS[i]
+        bg = DEMAND_BG[demand_name]
+        fg = DEMAND_FG[demand_name]
+        stroke = accent
+        tx = x + 22
+        ty = y + 31
+        svg_parts.append(f"""
+          <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="{bg}" stroke="{stroke}" stroke-width="3" stroke-dasharray="7 5"/>
+          <text x="{tx}" y="{ty}" font-family="Arial" font-size="16" font-weight="700" fill="{NAVY}">ZONE {i+1}</text>
+          <text x="{tx}" y="{ty+25}" font-family="Arial" font-size="13" fill="{TEXT}">
+             {r["temperature"]:.1f}°C  |  {r["occupancy"]} people  |  {r["humidity"]:.0f}% RH
+          </text>
+          <text x="{tx}" y="{ty+51}" font-family="Arial" font-size="12" font-weight="700" fill="{fg}">
+             Thermal demand: {demand:.0f}%  |  Predicted: {pred:.0f}%
+          </text>
+          <text x="{x+w-22}" y="{y+h-18}" text-anchor="end" font-family="Arial" font-size="13" font-weight="700" fill="{accent}">
+             AIRFLOW ALLOCATION  {damper}%
+          </text>
+        """)
+        # Flow arrow: thickness and opacity scale with damper.
+        x1, y1 = 600, 154
+        x2, y2 = arrow_targets[i]
+        width = max(2.5, 2.5 + damper / 14)
+        opacity = max(0.25, damper / 100)
+        svg_parts.append(f"""
+          <g class="flow" opacity="{opacity:.2f}">
+            <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"
+                  stroke="{accent}" stroke-width="{width:.1f}" stroke-linecap="round"
+                  marker-end="url(#arrow)"/>
+          </g>
+        """)
+    svg_parts.append("""
+        <text x="600" y="550" text-anchor="middle" font-family="Arial" font-size="12" fill="#6B7C8F">
+          Virtual zones represent thermal conditions inside one open room — no physical walls.
+        </text>
+      </svg>
+    </div>
+    """)
+    st.markdown("".join(svg_parts), unsafe_allow_html=True)
+else:
+    st.markdown(
+        f'<div class="zone-map"><div class="hvac">CENTRAL HVAC<small>Supply Air</small></div>'
+        f'<div class="zone-grid">' +
+        "".join(
             f'<div class="zone-box" style="background:{ZONE_COLORS[i]};border-color:{ZONE_ACCENTS[i]}">'
             f'<div class="zone-name">ZONE {i+1}</div>'
-            f'<div style="color:{MUTED};margin-top:18px;font-size:12px">Waiting for analysis</div>'
-            f'</div>'
-        )
-    map_html += body
-map_html += (
-    '</div><div class="map-note">Airflow allocation is represented by the '
-    'commanded damper opening. The four zones are virtual thermal zones inside one physical room.</div></div>'
-)
-st.markdown(map_html, unsafe_allow_html=True)
+            f'<div style="color:{MUTED};margin-top:18px;font-size:12px">Run analysis to activate the room twin</div>'
+            f'</div>' for i in range(4)
+        ) +
+        '</div><div class="map-note">The four zones are virtual thermal zones inside one physical room.</div></div>',
+        unsafe_allow_html=True
+    )
 
 # -------------------- SENSOR INPUTS --------------------
 st.markdown('<div class="section-title">❯ ZONE SENSOR INPUTS</div>', unsafe_allow_html=True)
@@ -753,18 +823,15 @@ st.markdown(
 if st.session_state.system:
     s = st.session_state.system
     e1, e2, e3 = st.columns(3)
-    energy_cards = [
-        ("CONVENTIONAL HVAC", f'{s["conventional_kw"]:.2f} kW'),
-        ("SHOTZS POWER", f'{s["shotzs_kw"]:.2f} kW'),
-        ("ESTIMATED SAVING", f'{s["saving"]:.1f}%'),
-    ]
-    for col, (label, value) in zip((e1, e2, e3), energy_cards):
+    for col, label, value in [
+        (e1, "CONVENTIONAL HVAC", f'{s["conventional_kw"]:.2f} kW'),
+        (e2, "SHOTZS POWER", f'{s["shotzs_kw"]:.2f} kW'),
+        (e3, "ESTIMATED SAVING", f'{s["saving"]:.1f}%'),
+    ]:
         with col:
             st.markdown(
-                f'<div class="metric-card">'
-                f'<div class="metric-label">{label}</div>'
-                f'<div class="metric-value">{value}</div>'
-                f'</div>',
+                f'<div class="metric-card"><div class="metric-label">{label}</div>'
+                f'<div class="metric-value">{value}</div></div>',
                 unsafe_allow_html=True
             )
 
@@ -952,15 +1019,119 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
         f"| **Estimated difference:** {difference:.1f}%"
     )
 
+    # -------------------- DYNAMIC ROOM DIGITAL TWIN --------------------
+    # The room is rendered as an SVG so the visual itself changes with every
+    # simulation step. Arrow thickness/opacity follows the calculated cooling
+    # allocation, while each zone displays live temperature, occupancy, RH,
+    # current demand and predicted demand.
+    svg = []
+    svg.append(f"""
+    <div style="background:#FBFCFE;border:1px solid {BORDER};border-radius:12px;padding:8px;overflow:hidden;">
+      <svg viewBox="0 0 1200 600" width="100%" role="img" aria-label="Dynamic SHOTZS digital twin">
+        <defs>
+          <marker id="twinArrow" markerWidth="12" markerHeight="12" refX="10" refY="4" orient="auto">
+            <path d="M0,0 L0,8 L11,4 z" fill="{NAVY}"/>
+          </marker>
+          <filter id="twinShadow"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity=".12"/></filter>
+          <style>
+            .airflowPulse {{ animation: airflow 1.2s ease-in-out infinite; }}
+            @keyframes airflow {{ 0%,100% {{ opacity:.45; }} 50% {{ opacity:1; }} }}
+          </style>
+        </defs>
+        <rect x="15" y="15" width="1170" height="570" rx="22" fill="#FFFFFF"
+              stroke="{NAVY}" stroke-width="4" filter="url(#twinShadow)"/>
+        <text x="600" y="48" text-anchor="middle" font-family="Arial" font-size="22"
+              font-weight="700" fill="{NAVY}">SHOTZS DIGITAL TWIN</text>
+        <text x="600" y="72" text-anchor="middle" font-family="Arial" font-size="13"
+              fill="{MUTED}">Virtual single room • Four thermal zones • No physical partitions</text>
+        <rect x="505" y="88" width="190" height="68" rx="14" fill="{NAVY}"/>
+        <text x="600" y="116" text-anchor="middle" font-family="Arial" font-size="17"
+              font-weight="700" fill="white">CENTRAL AC</text>
+        <text x="600" y="139" text-anchor="middle" font-family="Arial" font-size="11"
+              fill="#C9D8E7">CENTRAL AIRFLOW CONTROL</text>
+    """)
+
+    boxes = [
+        (45, 190, 535, 170, (310, 215)),
+        (620, 190, 535, 170, (890, 215)),
+        (45, 385, 535, 170, (310, 430)),
+        (620, 385, 535, 170, (890, 430)),
+    ]
+
+    for i, (bx, by, bw, bh, target) in enumerate(boxes):
+        control, pred = twin["last_controls"][i]
+        temp = twin["temps"][i]
+        occ = twin["occ"][i]
+        hum = twin["hum"][i]
+
+        if occ <= 0:
+            label = "UNOCCUPIED"
+            fg = MUTED
+        elif control <= 20:
+            label = "MINIMUM"
+            fg = BLUE
+        elif control <= 40:
+            label = "LOW"
+            fg = GREEN
+        elif control <= 70:
+            label = "MEDIUM"
+            fg = ORANGE
+        else:
+            label = "HIGH"
+            fg = RED
+
+        bg = DEMAND_BG[label]
+        accent = ZONE_ACCENTS[i]
+        tx = bx + 22
+
+        svg.append(f"""
+        <rect x="{bx}" y="{by}" width="{bw}" height="{bh}" rx="12"
+              fill="{bg}" stroke="{accent}" stroke-width="3" stroke-dasharray="7 5"/>
+        <text x="{tx}" y="{by+30}" font-family="Arial" font-size="17"
+              font-weight="700" fill="{NAVY}">ZONE {i+1}  |  {temp:.1f}°C  |  {occ} people  |  {hum:.0f}% RH</text>
+        <text x="{tx}" y="{by+57}" font-family="Arial" font-size="13"
+              font-weight="700" fill="{fg}">
+              Virtual thermal demand: {control:.0f}%  |  Predicted: {pred:.0f}%
+        </text>
+        <text x="{bx+bw-22}" y="{by+bh-25}" text-anchor="end" font-family="Arial"
+              font-size="14" font-weight="700" fill="{accent}">
+              AIRFLOW ALLOCATION  {control:.0f}%
+        </text>
+        """)
+
+        # Dynamic airflow arrow from central AC to each zone.
+        x2, y2 = target
+        width = max(2.5, 2.5 + control / 12)
+        opacity = max(0.25, control / 100)
+        svg.append(f"""
+        <g class="airflowPulse" opacity="{opacity:.2f}">
+          <line x1="600" y1="156" x2="{x2}" y2="{y2}"
+                stroke="{accent}" stroke-width="{width:.1f}" stroke-linecap="round"
+                marker-end="url(#twinArrow)"/>
+        </g>
+        """)
+
+    svg.append(f"""
+        <text x="600" y="578" text-anchor="middle" font-family="Arial" font-size="12"
+              fill="{MUTED}">
+          Outdoor: {twin["outdoor"]:.1f}°C  •  Simulated time: {twin["minute"]:02d}:00 / 60:00
+          •  Cooling allocation continuously rebalanced across the virtual zones
+        </text>
+      </svg>
+    </div>
+    """)
+    st.markdown("".join(svg), unsafe_allow_html=True)
+
+    # Compact live values below the visual.
     twin_rows = []
     for i in range(4):
         control, pred = twin["last_controls"][i]
         twin_rows.append({
             "ZONE": f"ZONE {i+1}",
-            "TEMPERATURE": f'{twin["temps"][i]:.2f} °C',
-            "OCCUPANCY": twin["occ"][i],
-            "HUMIDITY": f'{twin["hum"][i]:.1f}%',
-            "THERMAL DEMAND": f'{control:.0f}%',
+            "TEMP": f'{twin["temps"][i]:.1f}°C',
+            "OCC": twin["occ"][i],
+            "RH": f'{twin["hum"][i]:.0f}%',
+            "DEMAND": f'{control:.0f}%',
             "PREDICTED": f'{pred:.0f}%',
         })
     st.dataframe(pd.DataFrame(twin_rows), use_container_width=True, hide_index=True)
@@ -972,7 +1143,7 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
             "Zone 3": twin["history_t"][2],
             "Zone 4": twin["history_t"][3],
         })
-        st.line_chart(chart_data, height=260)
+        st.line_chart(chart_data, height=220)
 
     hottest = max(range(4), key=lambda i: twin["temps"][i])
     avg_pred = (
@@ -983,7 +1154,7 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
         f'Outdoor temperature: {twin["outdoor"]:.1f}°C • '
         f'Hottest zone: Zone {hottest+1} ({twin["temps"][hottest]:.1f}°C) • '
         f'Average predicted demand: {avg_pred:.0f}% • '
-        'Cooling allocation is rebalanced across the four virtual zones.'
+        'The visual airflow paths update with the simulated control decision.'
     )
 
 # -------------------- EXPORT --------------------
