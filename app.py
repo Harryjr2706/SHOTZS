@@ -1,6 +1,5 @@
 
 import streamlit as st
-import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import random
@@ -554,212 +553,39 @@ st.markdown(
 # -------------------- THERMAL ZONE MAP --------------------
 st.markdown('<div class="section-title">❯ THERMAL ZONE MAP</div>', unsafe_allow_html=True)
 st.markdown(
-    '<div class="section-subtitle">Live room view — one physical room with four virtual thermal zones</div>',
+    '<div class="section-subtitle">Live visualization of targeted airflow distribution</div>',
     unsafe_allow_html=True
 )
 
 map_results = st.session_state.results
-
-if map_results:
-    # IMPORTANT: Use Streamlit's HTML component for this visualization.
-    # Do NOT use st.markdown for the room HTML; Streamlit Cloud may escape
-    # SVG/embedded markup and display the source code instead.
-    zone_cards = []
-    for i, r in enumerate(map_results):
-        demand = float(r["thermal_score"])
-        pred = float(r["predicted_score"])
-        damper = float(r["damper"])
-        demand_name = r["demand"]
-        accent = ZONE_ACCENTS[i]
-        bg = DEMAND_BG[demand_name]
-        fg = DEMAND_FG[demand_name]
-
-        zone_cards.append(f"""
-        <div class="zone zone{i+1}" style="background:{bg};border-color:{accent};">
-            <div class="zone-title" style="color:{NAVY};">ZONE {i+1}</div>
-            <div class="zone-data">{r["temperature"]:.1f}°C &nbsp;|&nbsp; {r["occupancy"]} people &nbsp;|&nbsp; {r["humidity"]:.0f}% RH</div>
-            <div class="zone-demand" style="color:{fg};">
-                Thermal demand: {demand:.0f}% &nbsp;|&nbsp; Predicted: {pred:.0f}%
-            </div>
-            <div class="zone-airflow" style="color:{accent};">
-                AIRFLOW ALLOCATION &nbsp;{damper:.0f}%
-            </div>
-        </div>
-        """)
-
-    # CSS arrows are used instead of SVG so the browser receives ordinary HTML.
-    # Their length/thickness/opacity are controlled by the calculated damper.
-    arrow_angles = [-153, -27, 153, 27]
-    arrows = []
-    for i, r in enumerate(map_results):
-        damper = float(r["damper"])
-        accent = ZONE_ACCENTS[i]
-        width = max(2.5, 2.5 + damper / 14)
-        opacity = max(0.18, damper / 100)
-        length = min(39, 25 + damper * 0.14)
-        arrows.append(f"""
-        <div class="air-arrow a{i+1}"
-             style="--accent:{accent};--width:{width:.1f}px;--opacity:{opacity:.2f};
-                    --length:{length:.1f}%;--angle:{arrow_angles[i]}deg;">
-            <span></span>
-        </div>
-        """)
-
-    room_html = f"""
-    <!doctype html>
-    <html>
-    <head>
-    <meta charset="utf-8">
-    <style>
-        * {{ box-sizing:border-box; }}
-        html, body {{ margin:0; padding:0; background:transparent; }}
-        body {{ font-family:Arial, sans-serif; }}
-        .room {{
-            position:relative;
-            width:100%;
-            height:570px;
-            background:#FBFCFE;
-            border:3px solid {NAVY};
-            border-radius:18px;
-            overflow:hidden;
-        }}
-        .twin-title {{
-            text-align:center;
-            padding-top:15px;
-            color:{NAVY};
-            font-size:20px;
-            font-weight:700;
-        }}
-        .twin-sub {{
-            text-align:center;
-            margin-top:5px;
-            color:{MUTED};
-            font-size:11px;
-        }}
-        .ac {{
-            position:absolute;
-            left:50%;
-            top:68px;
-            transform:translateX(-50%);
-            width:190px;
-            height:62px;
-            background:{NAVY};
-            color:white;
-            border-radius:13px;
-            text-align:center;
-            padding-top:11px;
-            z-index:5;
-            box-shadow:0 4px 10px rgba(0,0,0,.12);
-        }}
-        .ac-main {{ font-size:16px; font-weight:700; }}
-        .ac-sub {{ font-size:10px; color:#C9D8E7; margin-top:5px; }}
-        .zone {{
-            position:absolute;
-            width:44%;
-            height:27%;
-            border:3px dashed;
-            border-radius:12px;
-            padding:18px 20px;
-            z-index:3;
-        }}
-        .zone1 {{ left:3%; top:34%; }}
-        .zone2 {{ right:3%; top:34%; }}
-        .zone3 {{ left:3%; bottom:5%; }}
-        .zone4 {{ right:3%; bottom:5%; }}
-        .zone-title {{ font-size:16px; font-weight:700; }}
-        .zone-data {{ margin-top:8px; font-size:13px; color:{TEXT}; }}
-        .zone-demand {{ margin-top:9px; font-size:12px; font-weight:700; }}
-        .zone-airflow {{
-            position:absolute;
-            right:18px;
-            bottom:15px;
-            font-size:13px;
-            font-weight:700;
-        }}
-        .air-arrow {{
-            position:absolute;
-            left:50%;
-            top:27%;
-            height:var(--width);
-            width:var(--length);
-            background:var(--accent);
-            opacity:var(--opacity);
-            transform-origin:0 50%;
-            transform:rotate(var(--angle));
-            border-radius:999px;
-            z-index:2;
-            animation:pulse 1.2s ease-in-out infinite;
-        }}
-        .air-arrow span {{
-            position:absolute;
-            right:-1px;
-            top:50%;
-            transform:translateY(-50%);
-            width:0;
-            height:0;
-            border-top:8px solid transparent;
-            border-bottom:8px solid transparent;
-            border-left:14px solid var(--accent);
-        }}
-        @keyframes pulse {{
-            0%,100% {{ filter:brightness(1); }}
-            50% {{ filter:brightness(1.25); }}
-        }}
-        .room-note {{
-            position:absolute;
-            left:0;
-            right:0;
-            bottom:7px;
-            text-align:center;
-            color:{MUTED};
-            font-size:11px;
-            z-index:4;
-        }}
-        @media (max-width:700px) {{
-            .room {{ height:520px; }}
-            .zone {{ height:28%; padding:11px 12px; }}
-            .zone-title {{ font-size:13px; }}
-            .zone-data, .zone-demand {{ font-size:10px; }}
-            .zone-airflow {{ font-size:10px; right:10px; bottom:10px; }}
-            .ac {{ width:145px; height:55px; top:65px; }}
-            .ac-main {{ font-size:13px; }}
-            .ac-sub {{ font-size:8px; }}
-        }}
-    </style>
-    </head>
-    <body>
-      <div class="room">
-        <div class="twin-title">VIRTUAL ROOM DIGITAL TWIN</div>
-        <div class="twin-sub">No physical partitions • Cooling dynamically rebalanced by SHOTZS</div>
-        <div class="ac">
-          <div class="ac-main">CENTRAL AC</div>
-          <div class="ac-sub">CENTRAL AIRFLOW CONTROL</div>
-        </div>
-        {''.join(arrows)}
-        {''.join(zone_cards)}
-        <div class="room-note">
-          Virtual zones represent thermal conditions inside one open room — no physical walls.
-        </div>
-      </div>
-    </body>
-    </html>
-    """
-
-    components.html(room_html, height=590, scrolling=False)
-
-else:
-    st.markdown(
-        f'<div class="zone-map"><div class="hvac">CENTRAL HVAC<small>Supply Air</small></div>'
-        f'<div class="zone-grid">' +
-        "".join(
+map_html = f'<div class="zone-map"><div class="hvac">CENTRAL HVAC<small>Supply Air</small></div><div class="zone-grid">'
+for i in range(4):
+    if map_results:
+        demand = map_results[i]["demand"]
+        damper = map_results[i]["damper"]
+        bg = DEMAND_BG[demand]
+        fg = DEMAND_FG[demand]
+        airflow = "█" * max(1, damper // 20)
+        body = (
+            f'<div class="zone-box" style="background:{bg};border-color:{ZONE_ACCENTS[i]}">'
+            f'<div class="zone-name">ZONE {i+1}</div>'
+            f'<div class="zone-result" style="color:{fg}">{demand} • DAMPER {damper}%</div>'
+            f'<div class="airflow" style="color:{ZONE_ACCENTS[i]}">Airflow: {airflow}</div>'
+            f'</div>'
+        )
+    else:
+        body = (
             f'<div class="zone-box" style="background:{ZONE_COLORS[i]};border-color:{ZONE_ACCENTS[i]}">'
             f'<div class="zone-name">ZONE {i+1}</div>'
-            f'<div style="color:{MUTED};margin-top:18px;font-size:12px">Run analysis to activate the room twin</div>'
-            f'</div>' for i in range(4)
-        ) +
-        '</div><div class="map-note">The four zones are virtual thermal zones inside one physical room.</div></div>',
-        unsafe_allow_html=True
-    )
+            f'<div style="color:{MUTED};margin-top:18px;font-size:12px">Waiting for analysis</div>'
+            f'</div>'
+        )
+    map_html += body
+map_html += (
+    '</div><div class="map-note">Airflow allocation is represented by the '
+    'commanded damper opening. The four zones are virtual thermal zones inside one physical room.</div></div>'
+)
+st.markdown(map_html, unsafe_allow_html=True)
 
 # -------------------- SENSOR INPUTS --------------------
 st.markdown('<div class="section-title">❯ ZONE SENSOR INPUTS</div>', unsafe_allow_html=True)
@@ -777,19 +603,19 @@ for i in range(4):
             f'<div style="font-weight:800;color:{ZONE_ACCENTS[i]};font-size:14px;margin-bottom:6px">ZONE {i+1}</div>',
             unsafe_allow_html=True
         )
-        temp = st.slider(
+        temp = st.number_input(
             "Temperature (°C)",
             min_value=15.0, max_value=45.0,
             value=float(st.session_state.zone_inputs[i][0]),
             step=0.1, key=f"temp_{i}"
         )
-        occ = st.slider(
+        occ = st.number_input(
             "Occupancy (persons)",
             min_value=0, max_value=40,
             value=int(st.session_state.zone_inputs[i][1]),
             step=1, key=f"occ_{i}"
         )
-        hum = st.slider(
+        hum = st.number_input(
             "Humidity (% RH)",
             min_value=0.0, max_value=100.0,
             value=float(st.session_state.zone_inputs[i][2]),
@@ -927,17 +753,12 @@ st.markdown(
 if st.session_state.system:
     s = st.session_state.system
     e1, e2, e3 = st.columns(3)
-    for col, label, value in [
-        (e1, "CONVENTIONAL HVAC", f'{s["conventional_kw"]:.2f} kW'),
-        (e2, "SHOTZS POWER", f'{s["shotzs_kw"]:.2f} kW'),
-        (e3, "ESTIMATED SAVING", f'{s["saving"]:.1f}%'),
-    ]:
-        with col:
-            st.markdown(
-                f'<div class="metric-card"><div class="metric-label">{label}</div>'
-                f'<div class="metric-value">{value}</div></div>',
-                unsafe_allow_html=True
-            )
+    with e1:
+        st.metric("CONVENTIONAL HVAC", f'{s["conventional_kw"]:.2f} kW')
+    with e2:
+        st.metric("SHOTZS POWER", f'{s["shotzs_kw"]:.2f} kW')
+    with e3:
+        st.metric("ESTIMATED SAVING", f'{s["saving"]:.1f}%')
 
 # -------------------- RECOMMENDATION --------------------
 if st.session_state.system:
@@ -977,7 +798,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-with st.expander("Open Virtual Room Digital Twin", expanded=True):
+with st.expander("Open Virtual Room Digital Twin", expanded=bool(twin_jump)):
     twin = st.session_state.twin
 
     def reset_twin_state():
@@ -1123,63 +944,15 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
         f"| **Estimated difference:** {difference:.1f}%"
     )
 
-    # -------------------- DYNAMIC ROOM DIGITAL TWIN --------------------
-    # Robust HTML/CSS renderer: avoids SVG escaping issues on Streamlit Cloud.
-    zones_html = []
-    for i in range(4):
-        control, pred = twin["last_controls"][i]
-        temp, occ, hum = twin["temps"][i], twin["occ"][i], twin["hum"][i]
-        if occ <= 0: label, fg = "UNOCCUPIED", MUTED
-        elif control <= 20: label, fg = "MINIMUM", BLUE
-        elif control <= 40: label, fg = "LOW", GREEN
-        elif control <= 70: label, fg = "MEDIUM", ORANGE
-        else: label, fg = "HIGH", RED
-        bg, accent = DEMAND_BG[label], ZONE_ACCENTS[i]
-        zones_html.append(f"""<div class=\"zone z{i+1}\" style=\"background:{bg};border-color:{accent};\">
-          <div class=\"zt\">ZONE {i+1}</div>
-          <div class=\"zs\">{temp:.1f}°C &nbsp;|&nbsp; {occ:.0f} people &nbsp;|&nbsp; {hum:.0f}% RH</div>
-          <div class=\"zd\" style=\"color:{fg}\">Thermal demand: {control:.0f}% &nbsp;|&nbsp; Predicted: {pred:.0f}%</div>
-          <div class=\"za\" style=\"color:{accent}\">AIRFLOW ALLOCATION &nbsp;{control:.0f}%</div>
-        </div>""")
-    arrow_specs = [(30,35,-28),(58,35,28),(30,70,28),(58,70,-28)]
-    arrows=[]
-    for i,(left,top,angle) in enumerate(arrow_specs):
-        control=twin["last_controls"][i][0]; accent=ZONE_ACCENTS[i]
-        width=max(3.0,3.0+control/14.0); opacity=max(0.18,control/100.0); length=95+2.0*control
-        arrows.append(f"<div class=\"arrow\" style=\"left:{left}%;top:{top}%;width:{length:.0f}px;height:{width:.1f}px;background:{accent};opacity:{opacity:.2f};transform:rotate({angle}deg)\"><i style=\"border-left-color:{accent}\"></i></div>")
-    twin_html = f"""<!doctype html><html><head><style>
-      *{{box-sizing:border-box}} body{{margin:0;background:transparent;font-family:Arial,sans-serif}}
-      .room{{position:relative;width:100%;height:555px;background:#fff;border:3px solid {NAVY};border-radius:18px;overflow:hidden}}
-      .title{{text-align:center;padding-top:13px;color:{NAVY};font-size:22px;font-weight:800}}
-      .sub{{text-align:center;color:{MUTED};font-size:11px;margin-top:4px}}
-      .ac{{position:absolute;z-index:10;left:50%;top:60px;transform:translateX(-50%);width:190px;padding:10px 5px;text-align:center;background:{NAVY};color:white;border-radius:12px}}
-      .ac b{{display:block;font-size:17px}} .ac small{{display:block;color:#C9D8E7;font-size:10px;margin-top:3px}}
-      .zone{{position:absolute;width:44%;height:28%;border:3px dashed;border-radius:14px;padding:16px 20px;z-index:4}}
-      .z1{{left:3.5%;top:34%}} .z2{{right:3.5%;top:34%}} .z3{{left:3.5%;top:64%}} .z4{{right:3.5%;top:64%}}
-      .zt{{font-size:17px;font-weight:800;color:{NAVY}}}.zs{{font-size:12px;font-weight:700;color:#25364A;margin-top:7px}}
-      .zd{{font-size:12px;font-weight:800;margin-top:9px}}.za{{position:absolute;right:18px;bottom:14px;font-size:12px;font-weight:800}}
-      .arrow{{position:absolute;z-index:3;transform-origin:left center;border-radius:99px;animation:pulse 1.2s ease-in-out infinite}}
-      .arrow i{{position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:16px solid}}
-      @keyframes pulse{{0%,100%{{filter:brightness(.9)}}50%{{filter:brightness(1.3)}}}}
-      .foot{{position:absolute;left:0;bottom:8px;width:100%;text-align:center;color:{MUTED};font-size:10px}}
-    </style></head><body><div class="room"><div class="title">SHOTZS DIGITAL TWIN</div>
-      <div class="sub">Virtual single room • Four thermal zones • No physical partitions • Cooling dynamically rebalanced</div>
-      <div class="ac"><b>CENTRAL AC</b><small>CENTRAL AIRFLOW CONTROL</small></div>
-      {''.join(arrows)}{''.join(zones_html)}
-      <div class="foot">Outdoor: {twin["outdoor"]:.1f}°C &nbsp;•&nbsp; Simulated time: {twin["minute"]:02d}:00 / 60:00 &nbsp;•&nbsp; Airflow continuously rebalanced</div>
-    </div></body></html>"""
-    components.html(twin_html, height=575, scrolling=False)
-
-    # Compact live values below the visual.
     twin_rows = []
     for i in range(4):
         control, pred = twin["last_controls"][i]
         twin_rows.append({
             "ZONE": f"ZONE {i+1}",
-            "TEMP": f'{twin["temps"][i]:.1f}°C',
-            "OCC": twin["occ"][i],
-            "RH": f'{twin["hum"][i]:.0f}%',
-            "DEMAND": f'{control:.0f}%',
+            "TEMPERATURE": f'{twin["temps"][i]:.2f} °C',
+            "OCCUPANCY": twin["occ"][i],
+            "HUMIDITY": f'{twin["hum"][i]:.1f}%',
+            "THERMAL DEMAND": f'{control:.0f}%',
             "PREDICTED": f'{pred:.0f}%',
         })
     st.dataframe(pd.DataFrame(twin_rows), use_container_width=True, hide_index=True)
@@ -1191,7 +964,7 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
             "Zone 3": twin["history_t"][2],
             "Zone 4": twin["history_t"][3],
         })
-        st.line_chart(chart_data, height=220)
+        st.line_chart(chart_data, height=260)
 
     hottest = max(range(4), key=lambda i: twin["temps"][i])
     avg_pred = (
@@ -1202,7 +975,7 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
         f'Outdoor temperature: {twin["outdoor"]:.1f}°C • '
         f'Hottest zone: Zone {hottest+1} ({twin["temps"][hottest]:.1f}°C) • '
         f'Average predicted demand: {avg_pred:.0f}% • '
-        'The visual airflow paths update with the simulated control decision.'
+        'Cooling allocation is rebalanced across the four virtual zones.'
     )
 
 # -------------------- EXPORT --------------------
