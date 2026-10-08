@@ -561,89 +561,192 @@ st.markdown(
 map_results = st.session_state.results
 
 if map_results:
-    # A compact SVG room view that updates whenever SHOTZS is re-run.
-    svg_parts = []
-    svg_parts.append(f"""
-    <div style="background:#FBFCFE;border:1px solid {BORDER};border-radius:12px;padding:10px;overflow:hidden;">
-      <svg viewBox="0 0 1200 560" width="100%" role="img" aria-label="SHOTZS four-zone room visualization">
-        <defs>
-          <filter id="shadow"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity=".12"/></filter>
-          <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto">
-            <path d="M0,0 L0,6 L9,3 z" fill="{NAVY}"/>
-          </marker>
-          <style>
-            .flow {{ animation: flowPulse 1.5s ease-in-out infinite; transform-origin:center; }}
-            @keyframes flowPulse {{ 0%,100% {{ opacity:.55; }} 50% {{ opacity:1; }} }}
-          </style>
-        </defs>
-        <rect x="15" y="15" width="1170" height="530" rx="20" fill="#FFFFFF" stroke="{NAVY}" stroke-width="4" filter="url(#shadow)"/>
-        <text x="600" y="48" text-anchor="middle" font-family="Arial" font-size="20" font-weight="700" fill="{NAVY}">
-          VIRTUAL ROOM DIGITAL TWIN
-        </text>
-        <text x="600" y="72" text-anchor="middle" font-family="Arial" font-size="13" fill="{MUTED}">
-          No physical partitions • Cooling is dynamically rebalanced by SHOTZS
-        </text>
-    """)
-    # Central AC
-    svg_parts.append(f"""
-        <rect x="505" y="86" width="190" height="68" rx="14" fill="{NAVY}"/>
-        <text x="600" y="114" text-anchor="middle" font-family="Arial" font-size="17" font-weight="700" fill="white">CENTRAL AC</text>
-        <text x="600" y="137" text-anchor="middle" font-family="Arial" font-size="11" fill="#C9D8E7">CENTRAL AIRFLOW CONTROL</text>
-    """)
-
-    zone_boxes = [
-        (45, 185, 535, 345),
-        (665, 185, 535, 345),
-        (45, 365, 535, 160),
-        (665, 365, 535, 160),
-    ]
-    # arrow targets toward each zone
-    arrow_targets = [(285, 215), (915, 215), (285, 410), (915, 410)]
+    # IMPORTANT: Use Streamlit's HTML component for this visualization.
+    # Do NOT use st.markdown for the room HTML; Streamlit Cloud may escape
+    # SVG/embedded markup and display the source code instead.
+    zone_cards = []
     for i, r in enumerate(map_results):
-        x, y, w, h = zone_boxes[i]
-        demand = r["thermal_score"]
-        pred = r["predicted_score"]
-        damper = r["damper"]
+        demand = float(r["thermal_score"])
+        pred = float(r["predicted_score"])
+        damper = float(r["damper"])
         demand_name = r["demand"]
         accent = ZONE_ACCENTS[i]
         bg = DEMAND_BG[demand_name]
         fg = DEMAND_FG[demand_name]
-        stroke = accent
-        tx = x + 22
-        ty = y + 31
-        svg_parts.append(f"""
-          <rect x="{x}" y="{y}" width="{w}" height="{h}" rx="12" fill="{bg}" stroke="{stroke}" stroke-width="3" stroke-dasharray="7 5"/>
-          <text x="{tx}" y="{ty}" font-family="Arial" font-size="16" font-weight="700" fill="{NAVY}">ZONE {i+1}</text>
-          <text x="{tx}" y="{ty+25}" font-family="Arial" font-size="13" fill="{TEXT}">
-             {r["temperature"]:.1f}°C  |  {r["occupancy"]} people  |  {r["humidity"]:.0f}% RH
-          </text>
-          <text x="{tx}" y="{ty+51}" font-family="Arial" font-size="12" font-weight="700" fill="{fg}">
-             Thermal demand: {demand:.0f}%  |  Predicted: {pred:.0f}%
-          </text>
-          <text x="{x+w-22}" y="{y+h-18}" text-anchor="end" font-family="Arial" font-size="13" font-weight="700" fill="{accent}">
-             AIRFLOW ALLOCATION  {damper}%
-          </text>
+
+        zone_cards.append(f"""
+        <div class="zone zone{i+1}" style="background:{bg};border-color:{accent};">
+            <div class="zone-title" style="color:{NAVY};">ZONE {i+1}</div>
+            <div class="zone-data">{r["temperature"]:.1f}°C &nbsp;|&nbsp; {r["occupancy"]} people &nbsp;|&nbsp; {r["humidity"]:.0f}% RH</div>
+            <div class="zone-demand" style="color:{fg};">
+                Thermal demand: {demand:.0f}% &nbsp;|&nbsp; Predicted: {pred:.0f}%
+            </div>
+            <div class="zone-airflow" style="color:{accent};">
+                AIRFLOW ALLOCATION &nbsp;{damper:.0f}%
+            </div>
+        </div>
         """)
-        # Flow arrow: thickness and opacity scale with damper.
-        x1, y1 = 600, 154
-        x2, y2 = arrow_targets[i]
+
+    # CSS arrows are used instead of SVG so the browser receives ordinary HTML.
+    # Their length/thickness/opacity are controlled by the calculated damper.
+    arrow_angles = [-153, -27, 153, 27]
+    arrows = []
+    for i, r in enumerate(map_results):
+        damper = float(r["damper"])
+        accent = ZONE_ACCENTS[i]
         width = max(2.5, 2.5 + damper / 14)
-        opacity = max(0.25, damper / 100)
-        svg_parts.append(f"""
-          <g class="flow" opacity="{opacity:.2f}">
-            <line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}"
-                  stroke="{accent}" stroke-width="{width:.1f}" stroke-linecap="round"
-                  marker-end="url(#arrow)"/>
-          </g>
+        opacity = max(0.18, damper / 100)
+        length = min(39, 25 + damper * 0.14)
+        arrows.append(f"""
+        <div class="air-arrow a{i+1}"
+             style="--accent:{accent};--width:{width:.1f}px;--opacity:{opacity:.2f};
+                    --length:{length:.1f}%;--angle:{arrow_angles[i]}deg;">
+            <span></span>
+        </div>
         """)
-    svg_parts.append("""
-        <text x="600" y="550" text-anchor="middle" font-family="Arial" font-size="12" fill="#6B7C8F">
+
+    room_html = f"""
+    <!doctype html>
+    <html>
+    <head>
+    <meta charset="utf-8">
+    <style>
+        * {{ box-sizing:border-box; }}
+        html, body {{ margin:0; padding:0; background:transparent; }}
+        body {{ font-family:Arial, sans-serif; }}
+        .room {{
+            position:relative;
+            width:100%;
+            height:570px;
+            background:#FBFCFE;
+            border:3px solid {NAVY};
+            border-radius:18px;
+            overflow:hidden;
+        }}
+        .twin-title {{
+            text-align:center;
+            padding-top:15px;
+            color:{NAVY};
+            font-size:20px;
+            font-weight:700;
+        }}
+        .twin-sub {{
+            text-align:center;
+            margin-top:5px;
+            color:{MUTED};
+            font-size:11px;
+        }}
+        .ac {{
+            position:absolute;
+            left:50%;
+            top:68px;
+            transform:translateX(-50%);
+            width:190px;
+            height:62px;
+            background:{NAVY};
+            color:white;
+            border-radius:13px;
+            text-align:center;
+            padding-top:11px;
+            z-index:5;
+            box-shadow:0 4px 10px rgba(0,0,0,.12);
+        }}
+        .ac-main {{ font-size:16px; font-weight:700; }}
+        .ac-sub {{ font-size:10px; color:#C9D8E7; margin-top:5px; }}
+        .zone {{
+            position:absolute;
+            width:44%;
+            height:27%;
+            border:3px dashed;
+            border-radius:12px;
+            padding:18px 20px;
+            z-index:3;
+        }}
+        .zone1 {{ left:3%; top:34%; }}
+        .zone2 {{ right:3%; top:34%; }}
+        .zone3 {{ left:3%; bottom:5%; }}
+        .zone4 {{ right:3%; bottom:5%; }}
+        .zone-title {{ font-size:16px; font-weight:700; }}
+        .zone-data {{ margin-top:8px; font-size:13px; color:{TEXT}; }}
+        .zone-demand {{ margin-top:9px; font-size:12px; font-weight:700; }}
+        .zone-airflow {{
+            position:absolute;
+            right:18px;
+            bottom:15px;
+            font-size:13px;
+            font-weight:700;
+        }}
+        .air-arrow {{
+            position:absolute;
+            left:50%;
+            top:27%;
+            height:var(--width);
+            width:var(--length);
+            background:var(--accent);
+            opacity:var(--opacity);
+            transform-origin:0 50%;
+            transform:rotate(var(--angle));
+            border-radius:999px;
+            z-index:2;
+            animation:pulse 1.2s ease-in-out infinite;
+        }}
+        .air-arrow span {{
+            position:absolute;
+            right:-1px;
+            top:50%;
+            transform:translateY(-50%);
+            width:0;
+            height:0;
+            border-top:8px solid transparent;
+            border-bottom:8px solid transparent;
+            border-left:14px solid var(--accent);
+        }}
+        @keyframes pulse {{
+            0%,100% {{ filter:brightness(1); }}
+            50% {{ filter:brightness(1.25); }}
+        }}
+        .room-note {{
+            position:absolute;
+            left:0;
+            right:0;
+            bottom:7px;
+            text-align:center;
+            color:{MUTED};
+            font-size:11px;
+            z-index:4;
+        }}
+        @media (max-width:700px) {{
+            .room {{ height:520px; }}
+            .zone {{ height:28%; padding:11px 12px; }}
+            .zone-title {{ font-size:13px; }}
+            .zone-data, .zone-demand {{ font-size:10px; }}
+            .zone-airflow {{ font-size:10px; right:10px; bottom:10px; }}
+            .ac {{ width:145px; height:55px; top:65px; }}
+            .ac-main {{ font-size:13px; }}
+            .ac-sub {{ font-size:8px; }}
+        }}
+    </style>
+    </head>
+    <body>
+      <div class="room">
+        <div class="twin-title">VIRTUAL ROOM DIGITAL TWIN</div>
+        <div class="twin-sub">No physical partitions • Cooling dynamically rebalanced by SHOTZS</div>
+        <div class="ac">
+          <div class="ac-main">CENTRAL AC</div>
+          <div class="ac-sub">CENTRAL AIRFLOW CONTROL</div>
+        </div>
+        {''.join(arrows)}
+        {''.join(zone_cards)}
+        <div class="room-note">
           Virtual zones represent thermal conditions inside one open room — no physical walls.
-        </text>
-      </svg>
-    </div>
-    """)
-    st.markdown("".join(svg_parts), unsafe_allow_html=True)
+        </div>
+      </div>
+    </body>
+    </html>
+    """
+
+    components.html(room_html, height=590, scrolling=False)
+
 else:
     st.markdown(
         f'<div class="zone-map"><div class="hvac">CENTRAL HVAC<small>Supply Air</small></div>'
@@ -1156,4 +1259,3 @@ st.markdown(
     '<div class="footer"><b>SHOTZS</b> &nbsp; Smart HVAC Occupancy-Aware Thermal Zoning System'
     '<span style="float:right">Estimated software model • Web version</span></div>',
     unsafe_allow_html=True
-)
