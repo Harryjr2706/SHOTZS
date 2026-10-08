@@ -1021,110 +1021,51 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
     )
 
     # -------------------- DYNAMIC ROOM DIGITAL TWIN --------------------
-    # The room is rendered as an SVG so the visual itself changes with every
-    # simulation step. Arrow thickness/opacity follows the calculated cooling
-    # allocation, while each zone displays live temperature, occupancy, RH,
-    # current demand and predicted demand.
-    svg = []
-    svg.append(f"""
-    <div style="background:#FBFCFE;border:1px solid {BORDER};border-radius:12px;padding:8px;overflow:hidden;">
-      <svg viewBox="0 0 1200 600" width="100%" role="img" aria-label="Dynamic SHOTZS digital twin">
-        <defs>
-          <marker id="twinArrow" markerWidth="12" markerHeight="12" refX="10" refY="4" orient="auto">
-            <path d="M0,0 L0,8 L11,4 z" fill="{NAVY}"/>
-          </marker>
-          <filter id="twinShadow"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-opacity=".12"/></filter>
-          <style>
-            .airflowPulse {{ animation: airflow 1.2s ease-in-out infinite; }}
-            @keyframes airflow {{ 0%,100% {{ opacity:.45; }} 50% {{ opacity:1; }} }}
-          </style>
-        </defs>
-        <rect x="15" y="15" width="1170" height="570" rx="22" fill="#FFFFFF"
-              stroke="{NAVY}" stroke-width="4" filter="url(#twinShadow)"/>
-        <text x="600" y="48" text-anchor="middle" font-family="Arial" font-size="22"
-              font-weight="700" fill="{NAVY}">SHOTZS DIGITAL TWIN</text>
-        <text x="600" y="72" text-anchor="middle" font-family="Arial" font-size="13"
-              fill="{MUTED}">Virtual single room • Four thermal zones • No physical partitions</text>
-        <rect x="505" y="88" width="190" height="68" rx="14" fill="{NAVY}"/>
-        <text x="600" y="116" text-anchor="middle" font-family="Arial" font-size="17"
-              font-weight="700" fill="white">CENTRAL AC</text>
-        <text x="600" y="139" text-anchor="middle" font-family="Arial" font-size="11"
-              fill="#C9D8E7">CENTRAL AIRFLOW CONTROL</text>
-    """)
-
-    boxes = [
-        (45, 190, 535, 170, (310, 215)),
-        (620, 190, 535, 170, (890, 215)),
-        (45, 385, 535, 170, (310, 430)),
-        (620, 385, 535, 170, (890, 430)),
-    ]
-
-    for i, (bx, by, bw, bh, target) in enumerate(boxes):
+    # Robust HTML/CSS renderer: avoids SVG escaping issues on Streamlit Cloud.
+    zones_html = []
+    for i in range(4):
         control, pred = twin["last_controls"][i]
-        temp = twin["temps"][i]
-        occ = twin["occ"][i]
-        hum = twin["hum"][i]
-
-        if occ <= 0:
-            label = "UNOCCUPIED"
-            fg = MUTED
-        elif control <= 20:
-            label = "MINIMUM"
-            fg = BLUE
-        elif control <= 40:
-            label = "LOW"
-            fg = GREEN
-        elif control <= 70:
-            label = "MEDIUM"
-            fg = ORANGE
-        else:
-            label = "HIGH"
-            fg = RED
-
-        bg = DEMAND_BG[label]
-        accent = ZONE_ACCENTS[i]
-        tx = bx + 22
-
-        svg.append(f"""
-        <rect x="{bx}" y="{by}" width="{bw}" height="{bh}" rx="12"
-              fill="{bg}" stroke="{accent}" stroke-width="3" stroke-dasharray="7 5"/>
-        <text x="{tx}" y="{by+30}" font-family="Arial" font-size="17"
-              font-weight="700" fill="{NAVY}">ZONE {i+1}  |  {temp:.1f}°C  |  {occ} people  |  {hum:.0f}% RH</text>
-        <text x="{tx}" y="{by+57}" font-family="Arial" font-size="13"
-              font-weight="700" fill="{fg}">
-              Virtual thermal demand: {control:.0f}%  |  Predicted: {pred:.0f}%
-        </text>
-        <text x="{bx+bw-22}" y="{by+bh-25}" text-anchor="end" font-family="Arial"
-              font-size="14" font-weight="700" fill="{accent}">
-              AIRFLOW ALLOCATION  {control:.0f}%
-        </text>
-        """)
-
-        # Dynamic airflow arrow from central AC to each zone.
-        x2, y2 = target
-        width = max(2.5, 2.5 + control / 12)
-        opacity = max(0.25, control / 100)
-        svg.append(f"""
-        <g class="airflowPulse" opacity="{opacity:.2f}">
-          <line x1="600" y1="156" x2="{x2}" y2="{y2}"
-                stroke="{accent}" stroke-width="{width:.1f}" stroke-linecap="round"
-                marker-end="url(#twinArrow)"/>
-        </g>
-        """)
-
-    svg.append(f"""
-        <text x="600" y="578" text-anchor="middle" font-family="Arial" font-size="12"
-              fill="{MUTED}">
-          Outdoor: {twin["outdoor"]:.1f}°C  •  Simulated time: {twin["minute"]:02d}:00 / 60:00
-          •  Cooling allocation continuously rebalanced across the virtual zones
-        </text>
-      </svg>
-    </div>
-    """)
-    # Streamlit Markdown escapes raw SVG markup on some deployments.
-    # Render the SVG inside a dedicated HTML component so the digital twin
-    # appears as an actual interactive visual instead of source code.
-    components.html("".join(svg), height=630, scrolling=False)
+        temp, occ, hum = twin["temps"][i], twin["occ"][i], twin["hum"][i]
+        if occ <= 0: label, fg = "UNOCCUPIED", MUTED
+        elif control <= 20: label, fg = "MINIMUM", BLUE
+        elif control <= 40: label, fg = "LOW", GREEN
+        elif control <= 70: label, fg = "MEDIUM", ORANGE
+        else: label, fg = "HIGH", RED
+        bg, accent = DEMAND_BG[label], ZONE_ACCENTS[i]
+        zones_html.append(f"""<div class=\"zone z{i+1}\" style=\"background:{bg};border-color:{accent};\">
+          <div class=\"zt\">ZONE {i+1}</div>
+          <div class=\"zs\">{temp:.1f}°C &nbsp;|&nbsp; {occ:.0f} people &nbsp;|&nbsp; {hum:.0f}% RH</div>
+          <div class=\"zd\" style=\"color:{fg}\">Thermal demand: {control:.0f}% &nbsp;|&nbsp; Predicted: {pred:.0f}%</div>
+          <div class=\"za\" style=\"color:{accent}\">AIRFLOW ALLOCATION &nbsp;{control:.0f}%</div>
+        </div>""")
+    arrow_specs = [(30,35,-28),(58,35,28),(30,70,28),(58,70,-28)]
+    arrows=[]
+    for i,(left,top,angle) in enumerate(arrow_specs):
+        control=twin["last_controls"][i][0]; accent=ZONE_ACCENTS[i]
+        width=max(3.0,3.0+control/14.0); opacity=max(0.18,control/100.0); length=95+2.0*control
+        arrows.append(f"<div class=\"arrow\" style=\"left:{left}%;top:{top}%;width:{length:.0f}px;height:{width:.1f}px;background:{accent};opacity:{opacity:.2f};transform:rotate({angle}deg)\"><i style=\"border-left-color:{accent}\"></i></div>")
+    twin_html = f"""<!doctype html><html><head><style>
+      *{{box-sizing:border-box}} body{{margin:0;background:transparent;font-family:Arial,sans-serif}}
+      .room{{position:relative;width:100%;height:555px;background:#fff;border:3px solid {NAVY};border-radius:18px;overflow:hidden}}
+      .title{{text-align:center;padding-top:13px;color:{NAVY};font-size:22px;font-weight:800}}
+      .sub{{text-align:center;color:{MUTED};font-size:11px;margin-top:4px}}
+      .ac{{position:absolute;z-index:10;left:50%;top:60px;transform:translateX(-50%);width:190px;padding:10px 5px;text-align:center;background:{NAVY};color:white;border-radius:12px}}
+      .ac b{{display:block;font-size:17px}} .ac small{{display:block;color:#C9D8E7;font-size:10px;margin-top:3px}}
+      .zone{{position:absolute;width:44%;height:28%;border:3px dashed;border-radius:14px;padding:16px 20px;z-index:4}}
+      .z1{{left:3.5%;top:34%}} .z2{{right:3.5%;top:34%}} .z3{{left:3.5%;top:64%}} .z4{{right:3.5%;top:64%}}
+      .zt{{font-size:17px;font-weight:800;color:{NAVY}}}.zs{{font-size:12px;font-weight:700;color:#25364A;margin-top:7px}}
+      .zd{{font-size:12px;font-weight:800;margin-top:9px}}.za{{position:absolute;right:18px;bottom:14px;font-size:12px;font-weight:800}}
+      .arrow{{position:absolute;z-index:3;transform-origin:left center;border-radius:99px;animation:pulse 1.2s ease-in-out infinite}}
+      .arrow i{{position:absolute;right:-2px;top:50%;transform:translateY(-50%);width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:16px solid}}
+      @keyframes pulse{{0%,100%{{filter:brightness(.9)}}50%{{filter:brightness(1.3)}}}}
+      .foot{{position:absolute;left:0;bottom:8px;width:100%;text-align:center;color:{MUTED};font-size:10px}}
+    </style></head><body><div class="room"><div class="title">SHOTZS DIGITAL TWIN</div>
+      <div class="sub">Virtual single room • Four thermal zones • No physical partitions • Cooling dynamically rebalanced</div>
+      <div class="ac"><b>CENTRAL AC</b><small>CENTRAL AIRFLOW CONTROL</small></div>
+      {''.join(arrows)}{''.join(zones_html)}
+      <div class="foot">Outdoor: {twin["outdoor"]:.1f}°C &nbsp;•&nbsp; Simulated time: {twin["minute"]:02d}:00 / 60:00 &nbsp;•&nbsp; Airflow continuously rebalanced</div>
+    </div></body></html>"""
+    components.html(twin_html, height=575, scrolling=False)
 
     # Compact live values below the visual.
     twin_rows = []
