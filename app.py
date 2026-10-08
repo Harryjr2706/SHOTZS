@@ -753,12 +753,20 @@ st.markdown(
 if st.session_state.system:
     s = st.session_state.system
     e1, e2, e3 = st.columns(3)
-    with e1:
-        st.metric("CONVENTIONAL HVAC", f'{s["conventional_kw"]:.2f} kW')
-    with e2:
-        st.metric("SHOTZS POWER", f'{s["shotzs_kw"]:.2f} kW')
-    with e3:
-        st.metric("ESTIMATED SAVING", f'{s["saving"]:.1f}%')
+    energy_cards = [
+        ("CONVENTIONAL HVAC", f'{s["conventional_kw"]:.2f} kW'),
+        ("SHOTZS POWER", f'{s["shotzs_kw"]:.2f} kW'),
+        ("ESTIMATED SAVING", f'{s["saving"]:.1f}%'),
+    ]
+    for col, (label, value) in zip((e1, e2, e3), energy_cards):
+        with col:
+            st.markdown(
+                f'<div class="metric-card">'
+                f'<div class="metric-label">{label}</div>'
+                f'<div class="metric-value">{value}</div>'
+                f'</div>',
+                unsafe_allow_html=True
+            )
 
 # -------------------- RECOMMENDATION --------------------
 if st.session_state.system:
