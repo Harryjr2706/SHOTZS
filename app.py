@@ -1259,3 +1259,4 @@ st.markdown(
     '<div class="footer"><b>SHOTZS</b> &nbsp; Smart HVAC Occupancy-Aware Thermal Zoning System'
     '<span style="float:right">Estimated software model • Web version</span></div>',
     unsafe_allow_html=True
+)
