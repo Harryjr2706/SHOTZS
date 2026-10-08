@@ -603,19 +603,19 @@ for i in range(4):
             f'<div style="font-weight:800;color:{ZONE_ACCENTS[i]};font-size:14px;margin-bottom:6px">ZONE {i+1}</div>',
             unsafe_allow_html=True
         )
-        temp = st.number_input(
+        temp = st.slider(
             "Temperature (°C)",
             min_value=15.0, max_value=45.0,
             value=float(st.session_state.zone_inputs[i][0]),
             step=0.1, key=f"temp_{i}"
         )
-        occ = st.number_input(
+        occ = st.slider(
             "Occupancy (persons)",
             min_value=0, max_value=40,
             value=int(st.session_state.zone_inputs[i][1]),
             step=1, key=f"occ_{i}"
         )
-        hum = st.number_input(
+        hum = st.slider(
             "Humidity (% RH)",
             min_value=0.0, max_value=100.0,
             value=float(st.session_state.zone_inputs[i][2]),
@@ -806,7 +806,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-with st.expander("Open Virtual Room Digital Twin", expanded=bool(twin_jump)):
+with st.expander("Open Virtual Room Digital Twin", expanded=True):
     twin = st.session_state.twin
 
     def reset_twin_state():
