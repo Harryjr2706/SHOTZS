@@ -1,5 +1,6 @@
 
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import numpy as np
 import random
@@ -1120,7 +1121,10 @@ with st.expander("Open Virtual Room Digital Twin", expanded=True):
       </svg>
     </div>
     """)
-    st.markdown("".join(svg), unsafe_allow_html=True)
+    # Streamlit Markdown escapes raw SVG markup on some deployments.
+    # Render the SVG inside a dedicated HTML component so the digital twin
+    # appears as an actual interactive visual instead of source code.
+    components.html("".join(svg), height=630, scrolling=False)
 
     # Compact live values below the visual.
     twin_rows = []
